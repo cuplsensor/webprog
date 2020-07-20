@@ -120,8 +120,12 @@ const promiseTimeout = function(ms, promise){
 
 class BaseCommand {
   constructor(cmd) {
-    this.cmd = parseInt(cmd, 16);
-    this.header = parseInt('80', 16);
+    this.cmd = parseInt(cmd, hexradix);
+    this.header = parseInt('80', hexradix);
+  }
+
+  toString() {
+    return "<CMD: " + this.bslcorecommand().toString(hexradix) + ">\n";
   }
 
   bslcorecommand() {
@@ -153,6 +157,18 @@ class MemoryCommand extends BaseCommand {
     this.ah = (addr >> 16) & 255;
   }
 
+  toString() {
+    var str = "<";
+
+    str += "CMD: " + this.bslcorecommand().toString(hexradix) + " ";
+
+    str += "ADDR: " + this.addr + " (0x" + this.ah.toString(hexradix).padStart(2,'0') + this.am.toString(hexradix).padStart(2,'0') + this.al.toString(hexradix).padStart(2,'0') + ")";
+
+    str += ">\n";
+
+    return str;
+  }
+
   bslcorecommand() {
     return [this.cmd, this.al, this.am, this.ah]
   }
@@ -175,6 +191,20 @@ class RxCommand extends MemoryCommand {
    this.data = data;
  }
 
+ toString() {
+    var str = "<";
+
+    str += "CMD: " + this.cmd.toString(hexradix) + " ";
+
+    str += "ADDR: " + this.addr + " (0x" + this.ah.toString(hexradix).padStart(2,'0') + this.am.toString(hexradix).padStart(2,'0') + this.al.toString(hexradix).padStart(2,'0') + ") ";
+
+    str += "DATA: " + this.data.toString(hexradix);
+
+    str += ">\n";
+
+    return str;
+  }
+
   bslcorecommand() {
     return super.bslcorecommand().concat(this.data);
   }
@@ -190,6 +220,18 @@ class ChangeBaudCmd extends BaseCommand {
   constructor(baud) {
     super('52');
     this.baud = baud;
+  }
+
+  toString() {
+    var str = "<";
+
+    str += "CMD: " + this.bslcorecommand().toString(hexradix) + " ";
+
+    str += "BAUD: " + this.baud.toString();
+
+    str += ">\n";
+
+    return str;
   }
 
   bslcorecommand() {
@@ -209,17 +251,44 @@ class RxPasswordCmd extends BaseCommand {
    this.password = password;
   }
 
+  toString() {
+    var str = "<";
+
+    str += "CMD: " + this.cmd.toString(hexradix) + " ";
+
+    str += "PWD: " + this.password.toString(hexradix);
+
+    str += ">\n";
+
+    return str;
+  }
+
   bslcorecommand() {
     return super.bslcorecommand().concat(this.password);
   }
 }
 
 class CRCCheckCmd extends MemoryCommand {
-  constructor(startaddr, lenbytes) {
+  constructor(startaddr, len) {
    super('16', startaddr);
-   this.lenlow = lenbytes & 255;
-   this.lenhigh = (lenbytes >> 8) & 255;
+   this.len = len;
+   this.lenlow = len & 255;
+   this.lenhigh = (len >> 8) & 255;
  }
+
+ toString() {
+    var str = "<";
+
+    str += "CMD: " + this.cmd.toString(hexradix) + " ";
+
+    str += "ADDR: " + this.addr.toString(hexradix) + " ";
+
+    str += "LEN: " + this.len.toString();
+
+    str += ">\n";
+
+    return str;
+  }
 
   bslcorecommand() {
     return super.bslcorecommand().concat([this.lenlow, this.lenhigh]);
@@ -296,8 +365,8 @@ class TiTxtBlock {
         rxbytecount = this.membytes.length-i;
       }
       var rxbytes = this.membytes.slice(i,i+rxbytecount);
+      var rxcommand = new RxCommand(this.memaddr + i, rxbytes);
       i = i + rxbytecount;
-      var rxcommand = new RxCommand(this.memaddr, rxbytes);
       this.rxcommands.push(rxcommand);
     }
   }
@@ -464,6 +533,12 @@ class Controller {
     return response;
   }
 
+  async cmdToStream(cmd) {
+    var pkt = cmd.bsldatapacket();
+    await this.writeToStream(pkt);
+    this.model.appendResponse(cmd);
+  }
+
   async writeToStream(pkt) {
     const writer = this.outputstream.getWriter();
     const arraybuffer = new Uint8Array(pkt).buffer;
@@ -494,8 +569,7 @@ class Controller {
     // Send an invalid password to trigger a mass erase.
     var badpassword = Array(32).fill(0);
     var badpasswordcmd = new RxPasswordCmd(badpassword);
-    var pkt = badpasswordcmd.bsldatapacket();
-    await this.writeToStream(pkt);
+    await this.cmdToStream(badpasswordcmd);
     var response = await this.readResponse();
     if (response.ack === AckEnum.ACK) {
       this.model.appendResponse("ACK received");
@@ -506,19 +580,13 @@ class Controller {
     // Send the valid password to unlock the bsl.
     var validpassword = Array(32).fill(255);
     var validpasswordcmd = new RxPasswordCmd(validpassword);
-    var pkt = validpasswordcmd.bsldatapacket();
-    await this.writeToStream(pkt);
+    await this.cmdToStream(validpasswordcmd);
     await this.readResponse();
 
     // Send the version command.
     var vercmd = new VersionCmd();
-    await this.writeToStream(vercmd.bsldatapacket());
+    await this.cmdToStream(vercmd);
     await this.readResponse();
-
-
-
-
-    //await this.port.open({ baudrate: 115200, parity: "even" });
 
     var i;
     for (i=0; i<this.model.titxt.blocks.length; i++)
@@ -527,7 +595,7 @@ class Controller {
       var j;
       for (j=0; j<block.rxcommands.length; j++) {
         var rxcommand = block.rxcommands[j];
-        await this.writeToStream(rxcommand.bsldatapacket());
+        await this.cmdToStream(rxcommand);
         await this.readResponse();
       }
     }
