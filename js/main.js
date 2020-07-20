@@ -2,14 +2,14 @@ const hexradix = 16
 const bytesperword = 2;
 const maxbytesperrx = 256;
 const BaudEnum = Object.freeze({"9600":2, "19200":3, "38400":4, "57600":4, "115200":6});
-// const AckEnum = Object.freeze({"ACK": 0,
-//                                   "BadHeader": parseInt('51', hexradix),
-//                                   "BadChecksum": parseInt('52', hexradix),
-//                                   "ZeroSize": parseInt('53', hexradix),
-//                                   "Oversize": parseInt('54', hexradix),
-//                                   "UnknownErr": parseInt('55', hexradix),
-//                                   "UnknownBaud": parseInt('56', hexradix),
-//                                   "SizeError": parseInt('57', hexradix)});
+const AckEnum = Object.freeze({"ACK": 0,
+                                  "BadHeader": parseInt('51', hexradix),
+                                  "BadChecksum": parseInt('52', hexradix),
+                                  "ZeroSize": parseInt('53', hexradix),
+                                  "Oversize": parseInt('54', hexradix),
+                                  "UnknownErr": parseInt('55', hexradix),
+                                  "UnknownBaud": parseInt('56', hexradix),
+                                  "SizeError": parseInt('57', hexradix)});
 
 // Modified from http://automationwiki.com/index.php?title=CRC-16-CCITT
 
@@ -101,6 +101,23 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// https://italonascimento.github.io/applying-a-timeout-to-your-promises/
+const promiseTimeout = function(ms, promise){
+  // Create a promise that rejects in <ms> milliseconds
+  let timeout = new Promise((resolve, reject) => {
+    let id = setTimeout(() => {
+      clearTimeout(id);
+      reject('Timed out in '+ ms + 'ms.')
+    }, ms)
+  })
+
+  // Returns a race between our timeout and the passed in promise
+  return Promise.race([
+    promise,
+    timeout
+  ])
+}
+
 class BaseCommand {
   constructor(cmd) {
     this.cmd = parseInt(cmd, 16);
@@ -143,7 +160,7 @@ class MemoryCommand extends BaseCommand {
 
 class RxCommand extends MemoryCommand {
  constructor(addr, data) {
-   super('1B', addr);
+   super('10', addr);
 
    // Check the command is not empty.
    if (data.length === 0) {
@@ -222,7 +239,27 @@ class Response {
     var lenh = bytearray[3];
     this.length = (lenh << 8) + lenl;
     this.cmd = bytearray[4];
-    this.data = bytearray.slice(5, -2);
+    this.data = Array.from(bytearray.slice(5, -2));
+  }
+
+  toString() {
+    let str = "";
+
+    if (this.ack === AckEnum.ACK) {
+      str += "<ACK ";
+    }
+
+    try {
+      str += "CMD: " + this.cmd.toString(16).toUpperCase() + " ";
+    } catch(err) {
+
+    }
+
+    str += "DATA: " + this.data.toString(16);
+
+    str += "> \n"
+
+    return str;
   }
 }
 
@@ -315,14 +352,30 @@ class ConfigSubject extends BaseSubject {
 
   appendResponse(response) {
     this._responselist.push(response);
+    this.notifyAll();
+  }
+
+  getResponses() {
+    var responsestr = "";
+
+    var i;
+    for (i=0; i<this._responselist.length; i++) {
+      var response = this._responselist[i];
+
+      responsestr += response.toString() + "\n";
+    }
+
+    return responsestr;
   }
 
   clearResponses() {
     this._responselist = [];
+    this.notifyAll();
   }
 
   set titxt(value) {
     this._titxt = new TiTxtModel(value);
+    this.notifyAll();
   }
 
   get titxt() {
@@ -352,7 +405,6 @@ class Controller {
   constructor(model) {
     this.model = model;
     this.port = null;
-    this.reader = null;
     this.inputstream = null;
     this.outputstream = null;
     this.writer = null;
@@ -365,25 +417,20 @@ class Controller {
     }
     this.port = port;
 
-    // - Wait for the port to open.
+    // - Wait for the port to open
+    await this.port.open({ baudrate: 9601, parity: "even"  });
+    await this.port.close();
+    await sleep(200);
     await this.port.open({ baudrate: 9625, parity: "even"  });
+    await this.port.close();
+    await this.port.open({ baudrate: 9600, parity: "even"  });
 
     // CODELAB: Add code setup the output stream here.
     this.outputstream = this.port.writable;
 
-    // CODELAB: Add code to read the stream here.
-    this.inputstream = this.port.readable;
-
-    this.reader = this.inputstream.getReader();
   }
 
   async disconnect() {
-    // Close the input stream (reader).
-    if (this.reader) {
-      await this.reader.cancel();
-      this.reader = null;
-    }
-
     // Close the output stream.
     if (this.outputstream) {
       await this.outputstream.getWriter().close();
@@ -398,14 +445,23 @@ class Controller {
 
 
   async readResponse() {
-    const { value, done } = await this.reader.read();
-    if (value) {
-      this.model.log += value + '\n';
+    var response;
+    const reader = this.port.readable.getReader();
+
+    try {
+      while (true) {
+        await sleep(200);
+        const { done, value } = await reader.read();
+        response = new Response(value);
+        this.model.appendResponse(response);
+        this.model.log += value + '\n';
+        break;
+      }
+    } finally {
+      reader.releaseLock();
     }
-    if (done) {
-      console.log('[readloop] DONE', done);
-      this.reader.releaseLock();
-    }
+
+    return response;
   }
 
   async writeToStream(pkt) {
@@ -415,6 +471,7 @@ class Controller {
     writer.releaseLock();
   }
 
+
   async program() {
     this.model.clearResponses();
 
@@ -422,23 +479,36 @@ class Controller {
       await this.connect(null);
     }
 
+    // Increase speed.
+    var changebaud = new ChangeBaudCmd(BaudEnum["9600"]);
+    await this.writeToStream(changebaud.bsldatapacket());
+    await this.readResponse();
+
     var ycmd = "<y>";
     var yascii = ycmd.split('').map(function(itm){
       return itm.charCodeAt(0);
     });
-    await this.writeToStream(yascii);
-
-    await sleep(200);
+    //await this.writeToStream(yascii);
+    //await this.readResponse();
 
     // Send an invalid password to trigger a mass erase.
     var badpassword = Array(32).fill(0);
     var badpasswordcmd = new RxPasswordCmd(badpassword);
     var pkt = badpasswordcmd.bsldatapacket();
     await this.writeToStream(pkt);
-    await this.readResponse();
-
+    var response = await this.readResponse();
+    if (response.ack === AckEnum.ACK) {
+      this.model.appendResponse("ACK received");
+    }
     // There is no response to a bad password. Wait for 2 seconds whilst a mass erase occurs.
-    await sleep(1000);
+    await sleep(2000);
+
+    // Send the valid password to unlock the bsl.
+    var validpassword = Array(32).fill(255);
+    var validpasswordcmd = new RxPasswordCmd(validpassword);
+    var pkt = validpasswordcmd.bsldatapacket();
+    await this.writeToStream(pkt);
+    await this.readResponse();
 
     // Send the version command.
     var vercmd = new VersionCmd();
@@ -446,6 +516,21 @@ class Controller {
     await this.readResponse();
 
 
+
+
+    //await this.port.open({ baudrate: 115200, parity: "even" });
+
+    var i;
+    for (i=0; i<this.model.titxt.blocks.length; i++)
+    {
+      var block = this.model.titxt.blocks[i];
+      var j;
+      for (j=0; j<block.rxcommands.length; j++) {
+        var rxcommand = block.rxcommands[j];
+        await this.writeToStream(rxcommand.bsldatapacket());
+        await this.readResponse();
+      }
+    }
 
     await this.disconnect();
 
@@ -458,7 +543,7 @@ class Controller {
 }
 
 class View {
-  constructor(controller, btnprogid, txtboxid) {
+  constructor(controller, btnprogid, txtboxid, logboxid) {
     this.controller = controller;
     this.btnprog = document.getElementById(btnprogid);
     this.btnprog.addEventListener('click', () => {
@@ -474,7 +559,17 @@ class View {
       cancelable: true,
     });
     this.txtbox.dispatchEvent(event);
+
+    this.logbox = document.getElementById(logboxid);
+    this.controller.model.subscribe(this);
   }
+
+  update(updatedmodel) {
+    this.logbox.value = updatedmodel.getResponses();
+  }
+
+
+
 
 }
 
