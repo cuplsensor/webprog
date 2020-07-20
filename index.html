@@ -12,12 +12,9 @@
   <meta property="og:url" content="">
   <meta property="og:image" content="">
 
-  <link rel="manifest" href="site.webmanifest">
   <link rel="apple-touch-icon" href="icon.png">
   <!-- Place favicon.ico in the root directory -->
-
-  <link rel="stylesheet" href="css/normalize.css">
-  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/bulma.css">
 
   <meta name="theme-color" content="#fafafa">
 
@@ -40,14 +37,11 @@
 </head>
 
 <body>
-
-  <!-- Add your site or application content here -->
-  <p>Hello world! This is HTML5 Boilerplate.</p>
-
-
-  <button id="btnprog">Program</button>
-  <textarea rows="10" id="titxt">
-    @8000
+  <section class="section">
+    <div class="container pb-1">
+      <h1 class="title">MSP430 Web Programmer</h1>
+      <h2 class="subtitle">webprog.js</h2>
+      <textarea class="textarea" id="titxt">@8000
 02 00 E0 01 00 00 00 00 00 00 01 00 01 00 00 00
 02 00 02 00 00 00 03 00 02 00 05 00 02 00 03 00
 00 00 04 00 04 00 00 00 05 00 04 00 03 00 04 00
@@ -927,10 +921,21 @@ F8 B5 22 B6 22 B6 22 B6
 22 B6 22 B6 DC B5
 q
   </textarea>
+    </div>
+    <div class="container pb-1">
+      <button id="btnprog">Program</button>
+    </div>
+    <div class="container pb-1">
+      <textarea class="textarea" id="logtxt">
+      </textarea>
+    </div>
 
-  <textarea id="logtxt" rows="20" cols="100">
+  </section>
 
-  </textarea>
+
+
+
+
 
 </body>
 

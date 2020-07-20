@@ -11,8 +11,8 @@ const AckEnum = Object.freeze({"ACK": 0,
                                   "UnknownBaud": parseInt('56', hexradix),
                                   "SizeError": parseInt('57', hexradix)});
 
+//-------------- Credit to chitchcock for this CRC code https://gist.github.com/chitchcock/5112270 ------------///
 // Modified from http://automationwiki.com/index.php?title=CRC-16-CCITT
-
 var crcTable = [0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50a5,
 0x60c6, 0x70e7, 0x8108, 0x9129, 0xa14a, 0xb16b,
 0xc18c, 0xd1ad, 0xe1ce, 0xf1ef, 0x1231, 0x0210,
@@ -73,6 +73,7 @@ function crc16(s) {
 
     return ((crc ^ 0) & 0xFFFF);
 }
+//-------------- END of code from chitchcock ------------------//
 
 function checkHexAndLength(str, length) {
   var hexre = /[0-9A-Fa-f]{1,}/g;
@@ -479,7 +480,7 @@ class Controller {
     this.writer = null;
   }
 
-  async connect(port) {
+  async connect(port, baudrate) {
     // Connect to a port.
     if (port === null) {
       port = await navigator.serial.requestPort();  // If no port has been provided, request a port.
@@ -487,12 +488,8 @@ class Controller {
     this.port = port;
 
     // - Wait for the port to open
-    await this.port.open({ baudrate: 9601, parity: "even"  });
-    await this.port.close();
+    await this.port.open({ baudrate:baudrate, databits:8, stopbits:1, parity:"even", buffersize:1024, rtscts:false, xon:false, xoff:false, xany:false  });
     await sleep(200);
-    await this.port.open({ baudrate: 9625, parity: "even"  });
-    await this.port.close();
-    await this.port.open({ baudrate: 9600, parity: "even"  });
 
     // CODELAB: Add code setup the output stream here.
     this.outputstream = this.port.writable;
@@ -551,13 +548,18 @@ class Controller {
     this.model.clearResponses();
 
     if (this.port === null) {
-      await this.connect(null);
+      // Special baud rate for enabling even parity https://www.ti.com/lit/ug/slau647o/slau647o.pdf
+      await this.connect(null, 9600);
+      var port = this.port;
+      await this.disconnect();
+      await this.connect(port, 9601);
     }
+    // Possibly use 9625 as well.
 
     // Increase speed.
-    var changebaud = new ChangeBaudCmd(BaudEnum["9600"]);
-    await this.writeToStream(changebaud.bsldatapacket());
-    await this.readResponse();
+    //var changebaud = new ChangeBaudCmd(BaudEnum["9601"]);
+    //await this.writeToStream(changebaud.bsldatapacket());
+    //await this.readResponse();
 
     var ycmd = "<y>";
     var yascii = ycmd.split('').map(function(itm){
@@ -601,6 +603,11 @@ class Controller {
     }
 
     await this.disconnect();
+
+    // Special baud rate for disabling even parity https://www.ti.com/lit/ug/slau647o/slau647o.pdf
+    //await this.connect(this.port, 9621);
+
+    //await this.disconnect();
 
 
   }
