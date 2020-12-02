@@ -20,20 +20,6 @@
   <meta name="theme-color" content="#fafafa">
 
   <script src="js/jquery-3.5.1.min.js"></script>
-  <script>
-    $(function() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const txturl = urlParams.get('txturl');
-      if (txturl !== "") {
-        fetch(txturl, {mode: 'cors'})
-          .then(response => response.text())
-          .then((txtdata) => {
-          $("textarea#titxt").val(txtdata);
-        });
-      }
-
-    });
-  </script>
   <script src="webprog.js"></script>
   <script>
     let configsubject;
@@ -44,7 +30,6 @@
       configsubject = new ConfigSubject();
       controller = new Controller(configsubject);
       view = new View(controller, "btnprog", "titxt", "logtxt");
-
     }
 
     window.onload = init;
