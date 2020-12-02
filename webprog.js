@@ -562,7 +562,8 @@ class Controller {
     var yascii = ycmd.split('').map(function(itm){
       return itm.charCodeAt(0);
     });
-    //await this.writeToStream(yascii);
+    await this.writeToStream(yascii);
+    await sleep(1000);
     //await this.readResponse();
 
     // Send an invalid password to trigger a mass erase.
