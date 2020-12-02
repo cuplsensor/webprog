@@ -488,7 +488,7 @@ class Controller {
     this.port = port;
 
     // - Wait for the port to open
-    await this.port.open({ baudrate:baudrate, databits:8, stopbits:1, parity:"even", buffersize:1024, rtscts:false, xon:false, xoff:false, xany:false  });
+    await this.port.open({ baudRate:baudrate, dataBits:8, stopBits:1, parity:"even", buffersize:1024  });
     await sleep(200);
 
     // CODELAB: Add code setup the output stream here.
