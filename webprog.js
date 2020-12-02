@@ -592,11 +592,22 @@ class Controller {
     for (i=0; i<this.model.titxt.blocks.length; i++)
     {
       var block = this.model.titxt.blocks[i];
-      var j;
-      for (j=0; j<block.rxcommands.length; j++) {
-        var rxcommand = block.rxcommands[j];
-        await this.cmdToStream(rxcommand);
-        await this.readResponse();
+      var j=0;
+      var errcount=0;
+      while (j<block.rxcommands.length) {
+        try {
+         var rxcommand = block.rxcommands[j];
+         await this.cmdToStream(rxcommand);
+         await this.readResponse();
+         j++; 
+        } catch(e) {
+          errcount++;
+          if (errcount > 5) {
+           break; 
+          }
+          console.log("trying again");
+        }
+        
       }
     }
 
