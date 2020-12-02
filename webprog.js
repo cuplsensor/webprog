@@ -616,7 +616,7 @@ class Controller {
 }
 
 class View {
-  constructor(controller, btnprogid, txturl, txtboxid, logboxid) {
+  constructor(controller, btnprogid, txtboxid, logboxid) {
     this.controller = controller;
     this.btnprog = document.getElementById(btnprogid);
     this.btnprog.addEventListener('click', () => {
