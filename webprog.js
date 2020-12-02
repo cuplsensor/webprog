@@ -616,12 +616,22 @@ class Controller {
 }
 
 class View {
-  constructor(controller, btnprogid, txtboxid, logboxid) {
+  constructor(controller, btnprogid, txturl, txtboxid, logboxid) {
     this.controller = controller;
     this.btnprog = document.getElementById(btnprogid);
     this.btnprog.addEventListener('click', () => {
       this.controller.program().then();
     }, false);
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const txturl = urlParams.get('txturl');
+    if (txturl !== "") {
+      fetch(txturl, {mode: 'cors'})
+        .then(response => response.text())
+        .then((txtdata) => {
+        this.controller.titxt = txtdata;
+      });
+    }
 
     this.txtbox = document.getElementById(txtboxid);
     this.txtbox.addEventListener('input', (event) => {
@@ -632,6 +642,8 @@ class View {
       cancelable: true,
     });
     this.txtbox.dispatchEvent(event);
+    
+    
 
     this.logbox = document.getElementById(logboxid);
     this.controller.model.subscribe(this);
@@ -639,6 +651,7 @@ class View {
 
   update(updatedmodel) {
     this.logbox.value = updatedmodel.getResponses();
+    this.txtbox.value = updatedmodel.titxt;
   }
 
 
