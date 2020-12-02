@@ -629,7 +629,7 @@ class View {
       fetch(txturl, {mode: 'cors'})
         .then(response => response.text())
         .then((txtdata) => {
-        this.controller.titxt = txtdata;
+        this.controller.model.titxt = txtdata;
       });
     }
 
