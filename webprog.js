@@ -549,10 +549,7 @@ class Controller {
 
     if (this.port === null) {
       // Special baud rate for enabling even parity https://www.ti.com/lit/ug/slau647o/slau647o.pdf
-      await this.connect(null, 9600);
-      var port = this.port;
-      await this.disconnect();
-      await this.connect(port, 9601);
+      await this.connect(port, 9625);
     }
     // Possibly use 9625 as well.
 
